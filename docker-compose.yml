@@ -26,6 +26,12 @@ services:
     # Uncomment if using `ENABLE_FAIL2BAN=1`:
     # cap_add:
     #   - NET_ADMIN
+    # Uncomment if using Caddy as reverse proxy / TLS termination:
+    # labels:
+    #   caddy: mail.example.com
+    #   caddy.reverse_proxy: "{{upstreams 80}}"
+    # networks:
+    #   - caddy
     healthcheck:
       test: "ss --listening --tcp | grep -P 'LISTEN.+:smtp' || exit 1"
       timeout: 3s
