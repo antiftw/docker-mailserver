@@ -33,6 +33,18 @@ Here you can adjust the [log-level for Supervisor](http://supervisord.org/loggin
 
 The log-level will show everything in its class and above.
 
+##### DMS_VMAIL_UID
+
+Default: 5000
+
+The User ID assigned to the static vmail user for `/var/mail` (_Mail storage managed by Dovecot_).
+
+##### DMS_VMAIL_GID
+
+Default: 5000
+
+The Group ID assigned to the static vmail group for `/var/mail` (_Mail storage managed by Dovecot_).
+
 ##### ONE_DIR
 
 - 0 => state in default directories.
@@ -119,8 +131,13 @@ Enabled `policyd-spf` in Postfix's configuration. You will likely want to set th
 
 ##### ENABLE_POP3
 
-- **empty** => POP3 service disabled
+- **0** => POP3 service disabled
 - 1 => Enables POP3 service
+
+##### ENABLE_IMAP
+
+- 0 => Disabled
+- **1** => Enabled
 
 ##### ENABLE_CLAMAV
 
@@ -211,9 +228,9 @@ Provide any valid URI. Examples:
 - `lmtps:inet:<host>:<port>` (secure lmtp with starttls)
 - `lmtp:<kopano-host>:2003` (use kopano as mailstore)
 
-##### POSTFIX\_MAILBOX\_SIZE\_LIMIT
+##### POSTFIX_MAILBOX_SIZE_LIMIT
 
-Set the mailbox size limit for all users. If set to zero, the size will be unlimited (default).
+Set the mailbox size limit for all users. If set to zero, the size will be unlimited (default). Size is in bytes.
 
 - **empty** => 0 (no limit)
 
@@ -224,9 +241,9 @@ Set the mailbox size limit for all users. If set to zero, the size will be unlim
 
 See [mailbox quota][docs-accounts-quota].
 
-##### POSTFIX\_MESSAGE\_SIZE\_LIMIT
+##### POSTFIX_MESSAGE_SIZE_LIMIT
 
-Set the message size limit for all users. If set to zero, the size will be unlimited (not recommended!)
+Set the message size limit for all users. If set to zero, the size will be unlimited (not recommended!). Size is in bytes.
 
 - **empty** => 10240000 (~10 MB)
 
@@ -353,6 +370,10 @@ The purpose of this setting is to opt-out of starting an internal Redis instance
 ##### RSPAMD_CHECK_AUTHENTICATED
 
 This settings controls whether checks should be performed on emails coming from authenticated users (i.e. most likely outgoing emails). The default value is `0` in order to align better with SpamAssassin. **We recommend** reading through [the Rspamd documentation on scanning outbound emails][rspamd-scanning-outbound] though to decide for yourself whether you need and want this feature.
+
+!!! note "Not all checks and actions are disabled"
+
+    DKIM signing of e-mails will still happen.
 
 - **0** => No checks will be performed for authenticated users
 - 1 => All default checks will be performed for authenticated users
@@ -565,8 +586,10 @@ Note: activate this only if you are confident in your bayes database for identif
 
 ##### FETCHMAIL_PARALLEL
 
-  **0** => `fetchmail` runs with a single config file `/etc/fetchmailrc`
-  **1** => `/etc/fetchmailrc` is split per poll entry. For every poll entry a separate fetchmail instance is started  to allow having multiple imap idle configurations defined.
+- **0** => `fetchmail` runs with a single config file `/etc/fetchmailrc`
+- 1 => `/etc/fetchmailrc` is split per poll entry. For every poll entry a separate fetchmail instance is started to [allow having multiple imap idle connections per server][fetchmail-imap-workaround] (_when poll entries reference the same IMAP server_).
+
+[fetchmail-imap-workaround]: https://otremba.net/wiki/Fetchmail_(Debian)#Immediate_Download_via_IMAP_IDLE
 
 Note: The defaults of your fetchmailrc file need to be at the top of the file. Otherwise it won't be added correctly to all separate `fetchmail` instances.
 #### Getmail
@@ -594,8 +617,8 @@ Enable or disable `getmail`.
 ##### LDAP_SERVER_HOST
 
 - **empty** => mail.example.com
-- => Specify the dns-name/ip-address where the ldap-server is listening, or an URI like `ldaps://mail.example.com`
-- NOTE: If you going to use DMS in combination with `compose.yaml` you can set the service name here
+- => Specify the `<dns-name>` / `<ip-address>` where the LDAP server is reachable via a URI like: `ldaps://mail.example.com`.
+- Note: You must include the desired URI scheme (`ldap://`, `ldaps://`, `ldapi://`).
 
 ##### LDAP_SEARCH_BASE
 
@@ -669,9 +692,8 @@ The following variables overwrite the default values for ```/etc/dovecot/dovecot
 ##### DOVECOT_URIS
 
 - **empty** => same as `LDAP_SERVER_HOST`
-- => Specify a space separated list of LDAP uris.
-- Note: If the protocol is missing, `ldap://` will be used.
-- Note: This deprecates `DOVECOT_HOSTS` (as it didn't allow to use LDAPS), which is currently still supported for backwards compatibility.
+- => Specify a space separated list of LDAP URIs.
+- Note: You must include the desired URI scheme (`ldap://`, `ldaps://`, `ldapi://`).
 
 ##### DOVECOT_LDAP_VERSION
 
@@ -764,7 +786,7 @@ Note: This postgrey setting needs `ENABLE_POSTGREY=1`
 ##### SASLAUTHD_LDAP_SERVER
 
 - **empty** => same as `LDAP_SERVER_HOST`
-- Note: since version 10.0.0, you can specify a protocol here (like ldaps://); this deprecates SASLAUTHD_LDAP_SSL.
+- Note: You must include the desired URI scheme (`ldap://`, `ldaps://`, `ldapi://`).
 
 ##### SASLAUTHD_LDAP_START_TLS
 
