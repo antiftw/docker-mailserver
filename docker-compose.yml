@@ -29,7 +29,7 @@ services:
     # Uncomment if using Caddy as reverse proxy / TLS termination:
     # labels:
     #   caddy: mail.example.com
-    #   caddy.reverse_proxy: "{{upstreams 80}}"
+    #   caddy.respond: "Unauthorized 403"
     # networks:
     #   - caddy
     healthcheck:
