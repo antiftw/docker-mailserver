@@ -7,7 +7,7 @@ function _setup_save_states() {
 
   STATEDIR='/var/mail-state'
 
-  if [[ ${ONE_DIR} -eq 1 ]] && [[ -d ${STATEDIR} ]]; then
+  if [[ -d ${STATEDIR} ]]; then
     _log 'debug' "Consolidating all state onto ${STATEDIR}"
 
     # Always enabled features:
@@ -24,6 +24,7 @@ function _setup_save_states() {
     [[ ${ENABLE_FAIL2BAN}     -eq 1 ]] && SERVICEDIRS+=('lib/fail2ban')
     [[ ${ENABLE_FETCHMAIL}    -eq 1 ]] && SERVICEDIRS+=('lib/fetchmail')
     [[ ${ENABLE_GETMAIL}      -eq 1 ]] && SERVICEDIRS+=('lib/getmail')
+    [[ ${ENABLE_MTA_STS}      -eq 1 ]] && SERVICEDIRS+=('lib/mta-sts')
     [[ ${ENABLE_POSTGREY}     -eq 1 ]] && SERVICEDIRS+=('lib/postgrey')
     [[ ${ENABLE_RSPAMD}       -eq 1 ]] && SERVICEDIRS+=('lib/rspamd')
     [[ ${ENABLE_RSPAMD_REDIS} -eq 1 ]] && SERVICEDIRS+=('lib/redis')
@@ -47,6 +48,9 @@ function _setup_save_states() {
         _log 'trace' "Moving ${SERVICEFILE} to ${DEST}"
         # Empty volume was mounted, or new content from enabling a feature ENV:
         mv "${SERVICEFILE}" "${DEST}"
+        # Apply SELinux security context to match the state directory, so access
+        # is not restricted to the current running container:
+        chcon -R --reference="${STATEDIR}" "${DEST}" 2>/dev/null || true
       fi
 
       # Symlink the original file in the container ($SERVICEFILE) to be
@@ -68,6 +72,9 @@ function _setup_save_states() {
         _log 'trace' "Moving contents of ${SERVICEDIR} to ${DEST}"
         # Empty volume was mounted, or new content from enabling a feature ENV:
         mv "${SERVICEDIR}" "${DEST}"
+        # Apply SELinux security context to match the state directory, so access
+        # is not restricted to the current running container:
+        chcon -R --reference="${STATEDIR}" "${DEST}" 2>/dev/null || true
       fi
 
       # Symlink the original path in the container ($SERVICEDIR) to be
@@ -84,6 +91,7 @@ function _setup_save_states() {
     [[ ${ENABLE_AMAVIS}       -eq 1 ]] && chown -R amavis:amavis             "${STATEDIR}/lib-amavis"
     [[ ${ENABLE_CLAMAV}       -eq 1 ]] && chown -R clamav:clamav             "${STATEDIR}/lib-clamav"
     [[ ${ENABLE_FETCHMAIL}    -eq 1 ]] && chown -R fetchmail:nogroup         "${STATEDIR}/lib-fetchmail"
+    [[ ${ENABLE_MTA_STS}      -eq 1 ]] && chown -R _mta-sts:_mta-sts         "${STATEDIR}/lib-mta-sts"
     [[ ${ENABLE_POSTGREY}     -eq 1 ]] && chown -R postgrey:postgrey         "${STATEDIR}/lib-postgrey"
     [[ ${ENABLE_RSPAMD}       -eq 1 ]] && chown -R _rspamd:_rspamd           "${STATEDIR}/lib-rspamd"
     [[ ${ENABLE_RSPAMD_REDIS} -eq 1 ]] && chown -R redis:redis               "${STATEDIR}/lib-redis"
@@ -109,9 +117,7 @@ function _setup_save_states() {
     # Ref: https://github.com/docker-mailserver/docker-mailserver/pull/3625
     chmod 730 "${STATEDIR}/spool-postfix/maildrop"
     chmod 710 "${STATEDIR}/spool-postfix/public"
-  elif [[ ${ONE_DIR} -eq 1 ]]; then
-    _log 'warn' "'ONE_DIR=1' but no volume was mounted to '${STATEDIR}'"
   else
-    _log 'debug' 'Not consolidating state (because it has been disabled)'
+    _log 'debug' "'${STATEDIR}' is not present; Not consolidating state"
   fi
 }

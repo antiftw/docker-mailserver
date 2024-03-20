@@ -62,8 +62,7 @@ function teardown_file() { _default_teardown ; }
   assert_output --partial "Supplying a default configuration (to '${SIGNING_CONF_FILE}')"
   refute_output --partial "'${SIGNING_CONF_FILE}' exists, not supplying a default"
   assert_output --partial "Finished DKIM key creation"
-  _run_in_container_bash "[[ -f ${SIGNING_CONF_FILE} ]]"
-  assert_success
+  _file_exists_in_container "${SIGNING_CONF_FILE}"
   _exec_in_container_bash "echo 'blabla' >${SIGNING_CONF_FILE}"
   local INITIAL_SHA512_SUM=$(_exec_in_container sha512sum "${SIGNING_CONF_FILE}")
 
@@ -87,8 +86,7 @@ function teardown_file() { _default_teardown ; }
   assert_success
 
   _count_files_in_directory_in_container /tmp/docker-mailserver/rspamd/dkim/ 3
-  _run_in_container_bash "[[ -f ${SIGNING_CONF_FILE} ]]"
-  assert_success
+  _file_exists_in_container "${SIGNING_CONF_FILE}"
 
   __check_path_in_signing_config "/tmp/docker-mailserver/rspamd/dkim/rsa-2048-mail-${DOMAIN_NAME}.private.txt"
   __check_selector_in_signing_config 'mail'
@@ -222,7 +220,7 @@ function __check_rsa_keys() {
   # Check the private key matches the specification
   _run_in_container_bash "openssl rsa -in '${BASE_FILE_NAME}.private.txt' -noout -text"
   assert_success
-  assert_line --index 0 "RSA Private-Key: (${KEYSIZE} bit, 2 primes)"
+  assert_line --index 0 "Private-Key: (${KEYSIZE} bit, 2 primes)"
 
   # Check the public key matches the specification
   #
@@ -232,7 +230,7 @@ function __check_rsa_keys() {
   PUBKEY=$(_exec_in_container_bash "grep -o 'p=.*' ${BASE_FILE_NAME}.public.dns.txt")
   _run_in_container_bash "openssl enc -base64 -d <<< ${PUBKEY#p=} | openssl pkey -inform DER -pubin -noout -text"
   assert_success
-  assert_line --index 0 "RSA Public-Key: (${KEYSIZE} bit)"
+  assert_line --index 0 "Public-Key: (${KEYSIZE} bit)"
 }
 
 # Verify that all DKIM key files are present.
@@ -241,8 +239,7 @@ function __check_rsa_keys() {
 function __check_key_files_are_present() {
   local BASE_FILE_NAME="${1:?Base file name must be supplied to __check_key_files_are_present}"
   for FILE in ${BASE_FILE_NAME}.{public.txt,public.dns.txt,private.txt}; do
-    _run_in_container_bash "[[ -f ${FILE} ]]"
-    assert_success
+    _file_exists_in_container "${FILE}"
   done
 }
 

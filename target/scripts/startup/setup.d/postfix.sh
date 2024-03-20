@@ -19,9 +19,6 @@ function _setup_postfix_early() {
     postconf "inet_protocols = ${POSTFIX_INET_PROTOCOLS}"
   fi
 
-  __postfix__log 'trace' "Disabling SMTPUTF8 support"
-  postconf 'smtputf8_enable = no'
-
   __postfix__log 'trace' "Configuring SASLauthd"
   if [[ ${ENABLE_SASLAUTHD} -eq 1 ]] && [[ ! -f /etc/postfix/sasl/smtpd.conf ]]; then
     cat >/etc/postfix/sasl/smtpd.conf << EOF
@@ -112,8 +109,9 @@ function _setup_postfix_late() {
 function __postfix__setup_override_configuration() {
   __postfix__log 'debug' 'Overriding / adjusting configuration with user-supplied values'
 
-  if [[ -f /tmp/docker-mailserver/postfix-main.cf ]]; then
-    cat /tmp/docker-mailserver/postfix-main.cf >>/etc/postfix/main.cf
+  local OVERRIDE_CONFIG_POSTFIX_MAIN='/tmp/docker-mailserver/postfix-main.cf'
+  if [[ -f ${OVERRIDE_CONFIG_POSTFIX_MAIN} ]]; then
+    cat "${OVERRIDE_CONFIG_POSTFIX_MAIN}" >>/etc/postfix/main.cf
     _adjust_mtime_for_postfix_maincf
 
     # do not directly output to 'main.cf' as this causes a read-write-conflict
@@ -121,20 +119,19 @@ function __postfix__setup_override_configuration() {
 
     mv /tmp/postfix-main-new.cf /etc/postfix/main.cf
     _adjust_mtime_for_postfix_maincf
-    __postfix__log 'trace' "Adjusted '/etc/postfix/main.cf' according to '/tmp/docker-mailserver/postfix-main.cf'"
+    __postfix__log 'trace' "Adjusted '/etc/postfix/main.cf' according to '${OVERRIDE_CONFIG_POSTFIX_MAIN}'"
   else
-    __postfix__log 'trace' "No extra Postfix settings loaded because optional '/tmp/docker-mailserver/postfix-main.cf' was not provided"
+    __postfix__log 'trace' "No extra Postfix settings loaded because optional '${OVERRIDE_CONFIG_POSTFIX_MAIN}' was not provided"
   fi
 
-  if [[ -f /tmp/docker-mailserver/postfix-master.cf ]]; then
+  local OVERRIDE_CONFIG_POSTFIX_MASTER='/tmp/docker-mailserver/postfix-master.cf'
+  if [[ -f ${OVERRIDE_CONFIG_POSTFIX_MASTER} ]]; then
     while read -r LINE; do
-      if [[ ${LINE} =~ ^[0-9a-z] ]]; then
-        postconf -P "${LINE}"
-      fi
-    done < /tmp/docker-mailserver/postfix-master.cf
-    __postfix__log 'trace' "Adjusted '/etc/postfix/master.cf' according to '/tmp/docker-mailserver/postfix-master.cf'"
+      [[ ${LINE} =~ ^[0-9a-z] ]] && postconf -P "${LINE}"
+    done < <(_get_valid_lines_from_file "${OVERRIDE_CONFIG_POSTFIX_MASTER}")
+    __postfix__log 'trace' "Adjusted '/etc/postfix/master.cf' according to '${OVERRIDE_CONFIG_POSTFIX_MASTER}'"
   else
-    __postfix__log 'trace' "No extra Postfix settings loaded because optional '/tmp/docker-mailserver/postfix-master.cf' was not provided"
+    __postfix__log 'trace' "No extra Postfix settings loaded because optional '${OVERRIDE_CONFIG_POSTFIX_MASTER}' was not provided"
   fi
 }
 

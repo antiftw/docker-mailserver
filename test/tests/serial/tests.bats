@@ -80,11 +80,13 @@ function teardown_file() { _default_teardown ; }
 }
 
 @test "imap: authentication works" {
-  _send_email 'auth/imap-auth' '-w 1 0.0.0.0 143'
+  _nc_wrapper 'auth/imap-auth.txt' '-w 1 0.0.0.0 143'
+  assert_success
 }
 
 @test "imap: added user authentication works" {
-  _send_email 'auth/added-imap-auth' '-w 1 0.0.0.0 143'
+  _nc_wrapper 'auth/added-imap-auth.txt' '-w 1 0.0.0.0 143'
+  assert_success
 }
 
 #
@@ -180,23 +182,16 @@ function teardown_file() { _default_teardown ; }
   assert_success
 }
 
-@test "system: /var/log/mail/mail.log is error free" {
-  _run_in_container grep 'non-null host address bits in' /var/log/mail/mail.log
-  assert_failure
-  _run_in_container grep 'mail system configuration error' /var/log/mail/mail.log
-  assert_failure
-  _run_in_container grep ': error:' /var/log/mail/mail.log
-  assert_failure
-  _run_in_container grep -i 'is not writable' /var/log/mail/mail.log
-  assert_failure
-  _run_in_container grep -i 'permission denied' /var/log/mail/mail.log
-  assert_failure
-  _run_in_container grep -i '(!)connect' /var/log/mail/mail.log
-  assert_failure
-  _run_in_container grep -i 'using backwards-compatible default setting' /var/log/mail/mail.log
-  assert_failure
-  _run_in_container grep -i 'connect to 127.0.0.1:10023: Connection refused' /var/log/mail/mail.log
-  assert_failure
+# TODO: Remove in favor of a common helper method, as described in vmail-id.bats equivalent test-case
+@test "system: Mail log is error free" {
+  _service_log_should_not_contain_string 'mail' 'non-null host address bits in'
+  _service_log_should_not_contain_string 'mail' 'mail system configuration error'
+  _service_log_should_not_contain_string 'mail' ': Error:'
+  _service_log_should_not_contain_string 'mail' 'is not writable'
+  _service_log_should_not_contain_string 'mail' 'Permission denied'
+  _service_log_should_not_contain_string 'mail' '(!)connect'
+  _service_log_should_not_contain_string 'mail' 'using backwards-compatible default setting'
+  _service_log_should_not_contain_string 'mail' 'connect to 127.0.0.1:10023: Connection refused'
 }
 
 @test "system: /var/log/auth.log is error free" {
@@ -210,7 +205,8 @@ function teardown_file() { _default_teardown ; }
 }
 
 @test "system: amavis decoders installed and available" {
-  _run_in_container_bash "grep -E '.*(Internal decoder|Found decoder) for\s+\..*' /var/log/mail/mail.log*|grep -Eo '(mail|Z|gz|bz2|xz|lzma|lrz|lzo|lz4|rpm|cpio|tar|deb|rar|arj|arc|zoo|doc|cab|tnef|zip|kmz|7z|jar|swf|lha|iso|exe)' | sort | uniq"
+  _service_log_should_contain_string_regexp 'mail' '.*(Internal decoder|Found decoder) for\s+\..*'
+  run bash -c "grep -Eo '(mail|Z|gz|bz2|xz|lzma|lrz|lzo|lz4|rpm|cpio|tar|deb|rar|arj|arc|zoo|doc|cab|tnef|zip|kmz|7z|jar|swf|lha|iso|exe)' <<< '${output}' | sort | uniq"
   assert_success
   # Support for doc and zoo removed in buster
   cat <<'EOF' | assert_output
@@ -262,7 +258,7 @@ EOF
 #
 
 @test "amavis: config overrides" {
-  _run_in_container_bash "grep 'Test Verification' /etc/amavis/conf.d/50-user | wc -l"
+  _run_in_container_bash "grep -c 'Test Verification' /etc/amavis/conf.d/50-user"
   assert_success
   assert_output 1
 }
@@ -288,13 +284,34 @@ EOF
 @test "spoofing: rejects sender forging" {
   # rejection of spoofed sender
   _wait_for_smtp_port_in_container_to_respond
-  _run_in_container_bash "openssl s_client -quiet -connect 0.0.0.0:465 < /tmp/docker-mailserver-test/auth/added-smtp-auth-spoofed.txt"
+
+  # An authenticated user cannot use an envelope sender (MAIL FROM)
+  # address they do not own according to `main.cf:smtpd_sender_login_maps` lookup
+  _send_email --expect-rejection \
+    --port 465 -tlsc --auth PLAIN \
+    --auth-user added@localhost.localdomain \
+    --auth-password mypassword \
+    --ehlo mail \
+    --from user2@localhost.localdomain \
+    --data 'auth/added-smtp-auth-spoofed.txt'
   assert_output --partial 'Sender address rejected: not owned by user'
 }
 
 @test "spoofing: accepts sending as alias" {
-  _run_in_container_bash "openssl s_client -quiet -connect 0.0.0.0:465 < /tmp/docker-mailserver-test/auth/added-smtp-auth-spoofed-alias.txt | grep 'End data with'"
+  # An authenticated account should be able to send mail from an alias,
+  # Verifies `main.cf:smtpd_sender_login_maps` includes /etc/postfix/virtual
+  # The envelope sender address (MAIL FROM) is the lookup key
+  # to each table. Address is authorized when a result that maps to
+  # the DMS account is returned.
+  _send_email \
+    --port 465 -tlsc --auth PLAIN \
+    --auth-user user1@localhost.localdomain \
+    --auth-password mypassword \
+    --ehlo mail \
+    --from alias1@localhost.localdomain \
+    --data 'auth/added-smtp-auth-spoofed-alias.txt'
   assert_success
+  assert_output --partial 'End data with'
 }
 
 #

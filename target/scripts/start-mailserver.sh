@@ -33,9 +33,9 @@ function _register_functions() {
 
   # ? >> Checks
 
-  _register_check_function '_check_improper_restart'
   _register_check_function '_check_hostname'
   _register_check_function '_check_log_level'
+  _register_check_function '_check_spam_prefix'
 
   # ? >> Setup
 
@@ -48,6 +48,7 @@ function _register_functions() {
     _register_setup_function '_setup_dovecot_sieve'
     _register_setup_function '_setup_dovecot_dhparam'
     _register_setup_function '_setup_dovecot_quota'
+    _register_setup_function '_setup_spam_subject'
     _register_setup_function '_setup_spam_to_junk'
     _register_setup_function '_setup_spam_mark_as_read'
   fi
@@ -70,6 +71,11 @@ function _register_functions() {
       _dms_panic__invalid_value "'${ACCOUNT_PROVISIONER}' is not a valid value for ACCOUNT_PROVISIONER"
       ;;
   esac
+
+  if [[ ${ENABLE_OAUTH2} -eq 1 ]]; then
+      _environment_variables_oauth2
+      _register_setup_function '_setup_oauth2'
+  fi
 
   if [[ ${ENABLE_SASLAUTHD} -eq 1 ]]; then
     _environment_variables_saslauthd
@@ -115,6 +121,11 @@ function _register_functions() {
   _register_setup_function '_setup_apply_fixes_after_configuration'
   _register_setup_function '_environment_variables_export'
 
+  if [[ ${ENABLE_MTA_STS} -eq 1 ]]; then
+    _register_setup_function '_setup_mta_sts'
+    _register_start_daemon '_start_daemon_mta_sts_daemon'
+  fi
+
   # ? >> Daemons
 
   _register_start_daemon '_start_daemon_cron'
@@ -158,24 +169,35 @@ function _register_functions() {
 # ? >> Executing all stacks / actual start of DMS
 # ------------------------------------------------------------
 
-_early_supervisor_setup
-_early_variables_setup
+# Ensure DMS only adjusts config files for a new container.
+# Container restarts should skip as they retain the modified config.
+if [[ ! -f /CONTAINER_START ]]; then
+  _early_supervisor_setup
+  _early_variables_setup
 
-_log 'info' "Welcome to docker-mailserver ${DMS_RELEASE}"
+  _log 'info' "Welcome to docker-mailserver ${DMS_RELEASE}"
 
-_register_functions
-_check
-_setup
-[[ ${LOG_LEVEL} =~ (debug|trace) ]] && print-environment
-_run_user_patches
-_start_daemons
+  _register_functions
+  _check
+  _setup
+  _run_user_patches
+else
+  # container was restarted
+  _early_variables_setup
+
+  _log 'info' 'Container was restarted. Skipping setup routines.'
+  _log 'info' "Welcome to docker-mailserver ${DMS_RELEASE}"
+
+  _register_functions
+fi
 
 # marker to check if container was restarted
 date >/CONTAINER_START
 
+[[ ${LOG_LEVEL} =~ (debug|trace) ]] && print-environment
+_start_daemons
+
 _log 'info' "${HOSTNAME} is up and running"
 
 touch /var/log/mail/mail.log
-tail -Fn 0 /var/log/mail/mail.log
-
-exit 0
+exec tail -Fn 0 /var/log/mail/mail.log

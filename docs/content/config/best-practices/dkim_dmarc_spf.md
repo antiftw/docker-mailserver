@@ -82,7 +82,7 @@ You should have:
 
     When the DMS FQDN is `mail.example.com` or `example.com`, by default this command will generate DKIM keys for `example.com` as the primary domain for your users mail accounts (eg: `hello@example.com`).
 
-    The DKIM generation does not have support to query LDAP for additionanl mail domains it should know about. If the primary mail domain is not sufficient, then you must explicitly specify any extra domains via the `domain` option:
+    The DKIM generation does not have support to query LDAP for additional mail domains it should know about. If the primary mail domain is not sufficient, then you must explicitly specify any extra domains via the `domain` option:
 
     ```sh
     # ENABLE_OPENDKIM=1 (default):
@@ -156,6 +156,13 @@ DKIM is currently supported by either OpenDKIM or Rspamd:
         use_esld = true;
         check_pubkey = true; # you want to use this in the beginning
 
+        selector = "mail";
+        # The path location is searched for a DKIM key with these variables:
+        # - `$domain` is sourced from the MIME mail message `From` header
+        # - `$selector` is configured for `mail` (as a default fallback)
+        path = "/tmp/docker-mailserver/dkim/keys/$domain/$selector.private";
+
+        # domain specific configurations can be provided below:
         domain {
             example.com {
                 path = "/tmp/docker-mailserver/rspamd/dkim/mail.private";
@@ -338,7 +345,7 @@ volumes:
 ```
 
 [docs-accounts-add]: ../user-management.md#adding-a-new-account
-[docs-volumes-config]: ../advanced/optional-config.md
+[docs-volumes-config]: ../advanced/optional-config.md#volumes-config
 [docs-env-opendkim]: ../environment.md#enable_opendkim
 [docs-env-rspamd]: ../environment.md#enable_rspamd
 [docs-rspamd-config-dropin]: ../security/rspamd.md#manually
